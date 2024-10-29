@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Prediction</title>
+</head>
+<body>
+    <h1>Upload a Video for Prediction</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+            <input type="range" name="threshold" id="y_threshold" min="0" max="200" class="slider">
+            <label for="y_threshold">Y Threshold: <span id="y_threshold_value">100</span></label>
+        <input type="file" name="video" id="video" accept="video/*" required>
+        <button type="submit">Upload and Predict</button>
+    </form>
+
+    <p id="statusMessage"></p>
+    <div id="result">
+        <h2>Result Image:</h2>
+        <img id="outputImage" src="" alt="Processed Image" style="display:none; max-width: 100%;">
+    </div>
+
+    <script>
+        document.getElementById('y_threshold').addEventListener('input', function() {
+            document.getElementById('y_threshold_value').textContent = this.value;
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const formData = new FormData();
+            const fileInput = document.getElementById('video');
+            formData.append('video', fileInput.files[0]);
+            formData.append('y_threshold', document.getElementById('y_threshold').value);
+
+            document.getElementById('statusMessage').textContent = 'Uploading and processing...';
+
+            // Send the video to /api/predict
+            try {
+                const predictResponse = await fetch('/api/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!predictResponse.ok) {
+                    throw new Error('Failed to process video');
+                }
+
+                const predictData = await predictResponse.json();
+                const code = predictData.code;
+                document.getElementById('statusMessage').textContent = 'Processing video...';
+
+                // Poll the /api/result endpoint to check processing status
+                const checkResult = async () => {
+                    const resultResponse = await fetch('/api/result', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code })
+                    });
+
+                    if (resultResponse.status === 202) {
+                        // If still processing, try again after a delay
+                        setTimeout(checkResult, 2000);
+                    } else if (resultResponse.ok) {
+                        // When processing is complete, display the image
+                        const imageUrl = URL.createObjectURL(await resultResponse.blob());
+                        const outputImage = document.getElementById('outputImage');
+                        outputImage.src = imageUrl;
+                        outputImage.style.display = 'block';
+                        document.getElementById('statusMessage').textContent = 'Prediction complete!';
+                    } else {
+                        document.getElementById('statusMessage').textContent = 'Failed to retrieve the result.';
+                    }
+                };
+
+                checkResult();
+            } catch (error) {
+                console.error(error);
+                document.getElementById('statusMessage').textContent = 'Error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
