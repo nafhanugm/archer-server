@@ -67,3 +67,20 @@ image
 ```
 
 Terdapat tiga kondisi respon yaitu processing jika sedang memproses. error jika terjadi error dan langsung image jika telah berhasil terprediksi.
+
+
+### POST /api/velocity
+Request
+``` JSON
+{
+    "video": file video,
+    "distance": jarak dalam meter
+}
+```
+Response 
+``` JSON
+{
+    "elapsed_time": waktu sampai target,
+    "velocity": kecepatan (m/s)
+}
+```
