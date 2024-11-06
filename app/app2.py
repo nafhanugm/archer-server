@@ -4,6 +4,7 @@ import numpy as np
 import os
 import uuid
 from pprint import pp
+from services.velocity.velocity import process_velocity
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -53,6 +54,34 @@ def api_result():
         return jsonify({"status": "processing"}), 202
     else:
         return jsonify({"status": "error", "message": "Failed to process video"}), 500
+    
+@app.route('/api/velocity', methods=['POST'])
+def process_video_route():
+    if 'video' not in request.files:
+        return jsonify({"error": "No video file uploaded"}), 400
+
+    video_file = request.files['video']
+    distance = float(request.form.get('distance', 0))
+
+    if not video_file or not distance:
+        return jsonify({"error": "Video file and distance are required"}), 400
+
+    # Save the video file
+    video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_file.filename)
+    video_file.save(video_path)
+
+    try:
+        elapsed_time, velocity = process_velocity(video_path, distance)
+        return jsonify({
+            "elapsed_time": elapsed_time,
+            "velocity": velocity
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    # finally:
+        # if os.path.exists(video_path):
+            # os.remove(video_path)  # Clean up the video file after processing
+
 
 def process_video(video_path, code, y_difference_threshold=60):
     # Extract the filename without extension
@@ -65,8 +94,6 @@ def process_video(video_path, code, y_difference_threshold=60):
     kernel = np.ones((3, 3), np.uint8)
     start = "00:00:00"
     end = "00:03:00"
-
-    print("y diff ", y_difference_threshold)
 
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
