@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file,send_from_directory
 import cv2
 import numpy as np
 import os
@@ -8,7 +8,7 @@ from services.velocity.velocity import process_velocity
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['OUTPUT_FOLDER'] = 'static/output'
+app.config['OUTPUT_FOLDER'] = os.path.join(os.getcwd(), 'static', 'output')
 processing_status = {}
 
 @app.route('/')
@@ -40,21 +40,29 @@ def api_predict():
 
 @app.route('/api/result', methods=['POST'])
 def api_result():
-    data = request.get_json()
-    code = data.get("code")
-    
-    if code not in processing_status:
-        return jsonify({"status": "error", "message": "Invalid code"}), 404
+    if request.is_json:
+        data = request.get_json()
+        code = data.get("code")
+        
+        if code not in processing_status:
+            return jsonify({"status": "error", "message": "Invalid code"}), 404
 
     # Check if processing is complete
-    if processing_status[code] == "complete":
-        output_image_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{code}_result.jpg")
-        return send_file(output_image_path, mimetype='image/jpeg')
-    elif processing_status[code] == "processing":
-        return jsonify({"status": "processing"}), 202
+   # Check if processing is complete
+        if processing_status[code] == "complete":
+            output_image_url = f"/static/output/{code}_result.jpg"
+            return jsonify({"status": "complete", "url": output_image_url}), 200
+        elif processing_status[code] == "processing":
+            return jsonify({"status": "processing"}), 202
+        else:
+            return jsonify({"status": "error", "message": "Failed to process video"}), 500
     else:
-        return jsonify({"status": "error", "message": "Failed to process video"}), 500
-    
+        return jsonify({"status": "error", "message": "Unsupported Media Type"}), 415
+
+@app.route('/static/output/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
+
 @app.route('/api/velocity', methods=['POST'])
 def process_video_route():
     if 'video' not in request.files:
@@ -173,3 +181,4 @@ if __name__ == '__main__':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
     app.run(debug=True)
+
